@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as Yup from 'yup';
 
 import Header from '../../components/Header';
 
@@ -19,6 +20,10 @@ interface IFoodPlate {
   available: boolean;
 }
 
+interface IError {
+  [key: string]: string;
+}
+
 const Dashboard: React.FC = () => {
   const [foods, setFoods] = useState<IFoodPlate[]>([]);
   const [editingFood, setEditingFood] = useState<IFoodPlate>({} as IFoodPlate);
@@ -27,7 +32,9 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     async function loadFoods(): Promise<void> {
-      // TODO LOAD FOODS
+      api.get('/foods').then(response => {
+        setFoods(response.data);
+      });
     }
 
     loadFoods();
@@ -37,9 +44,33 @@ const Dashboard: React.FC = () => {
     food: Omit<IFoodPlate, 'id' | 'available'>,
   ): Promise<void> {
     try {
-      // TODO ADD A NEW FOOD PLATE TO THE API
+      const schema = Yup.object().shape({
+        image: Yup.string().url().required('imagem obrigatorio'),
+        name: Yup.string().required('Nome obrigatorio'),
+        price: Yup.number().required('preco obrigatorio'),
+        description: Yup.string(),
+      });
+
+      await schema.validate(food, {
+        abortEarly: false,
+      });
+
+      await api.post('/foods', food).then(response => {
+        setFoods([...foods, response.data]);
+      });
+
+      setModalOpen(!modalOpen);
     } catch (err) {
       console.log(err);
+
+      if (err instanceof Yup.ValidationError) {
+        const errors: IError = {};
+        err.inner.forEach(error => {
+          errors[error.path] = error.message;
+        });
+
+        console.log(errors);
+      }
     }
   }
 
@@ -47,10 +78,43 @@ const Dashboard: React.FC = () => {
     food: Omit<IFoodPlate, 'id' | 'available'>,
   ): Promise<void> {
     // TODO UPDATE A FOOD PLATE ON THE API
+    try {
+      const schema = Yup.object().shape({
+        image: Yup.string().url().required('imagem obrigatorio'),
+        name: Yup.string().required('Nome obrigatorio'),
+        price: Yup.number().required('preco obrigatorio'),
+        description: Yup.string(),
+      });
+
+      await schema.validate(food, {
+        abortEarly: false,
+      });
+
+      const { id } = editingFood;
+      await api.put(`/foods/${id}`, food).then(response => {
+        const newFoods = foods.filter(f => f.id !== id);
+        setFoods([...newFoods, response.data]);
+      });
+      console.log(editingFood);
+      setEditModalOpen(!editModalOpen);
+    } catch (err) {
+      console.log(err);
+
+      if (err instanceof Yup.ValidationError) {
+        const errors: IError = {};
+        err.inner.forEach(error => {
+          errors[error.path] = error.message;
+        });
+
+        console.log(errors);
+      }
+    }
   }
 
   async function handleDeleteFood(id: number): Promise<void> {
-    // TODO DELETE A FOOD PLATE FROM THE API
+    api.delete(`/foods/${id}`);
+    const newFoods = foods.filter(food => food.id !== id);
+    setFoods(newFoods);
   }
 
   function toggleModal(): void {
@@ -62,7 +126,8 @@ const Dashboard: React.FC = () => {
   }
 
   function handleEditFood(food: IFoodPlate): void {
-    // TODO SET THE CURRENT EDITING FOOD ID IN THE STATE
+    toggleEditModal();
+    setEditingFood(food);
   }
 
   return (
